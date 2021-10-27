@@ -7,14 +7,17 @@
 // ADF4351 PLL-VCO Board 
 //
 // License: adapted from code by oe6ocg, and others.
-//*****************************************************************
-
+//
+// Refactored and bug fixed: Robin Szemeti, G1YFG
+//
 // Remember to use resistor divider to translate Arduino 5V to 3.3V for the 
 // VCO board.  It *will not like* 5V!
 
 #include <Wire.h>
 #include <SPI.h>
 #include <avr/sleep.h>
+
+// Configuration begins here ********************************************
 
 // Uses SPI 0 (2 pins) plus a "select pin", can work with more than one device.
 
@@ -29,6 +32,8 @@ unsigned long Freq2 = 2175000;  //Frequency in KHz
 
 long refin = 10000000; // 10Mhz
 long ChanStep = 25000; //Channel spacing
+
+// Configuration ends here, no need to change stuff below here hopefully .. 
 
 unsigned long Reg[6]; //ADF4351 Reg's
 
@@ -217,7 +222,7 @@ void ConvertFreq(unsigned long freq, unsigned long R[])
   int B_BandSelClk = 200; // 8bit
 
 
-// an unsigend long wont quite hold 4.4GHz, so work with f/10 for now.
+  // an unsigend long wont quite hold 4.4GHz, so work with f/10 for now.
   unsigned long RFout = freq * 100;   // VCO-Frequenz
   // calc bandselect und RF-div
   int outdiv = 1;
@@ -273,11 +278,3 @@ void ConvertFreq(unsigned long freq, unsigned long R[])
 }
 //to do instead of writing 0x08000000 you can use other two possibilities: (1ul << 27) or (uint32_t) (1 << 27).
 
-
-// as PLL-Register Referenz
-// R[0] = (0x002E0020); // 145.0 Mhz, 12.5khz raster
-// R[1] = (0x08008029);
-// R[2] = (0x00004E42);
-// R[3] = (0x000004B3);
-// R[4] = (0x00BC8024);
-// R[5] = (0x00580005);
