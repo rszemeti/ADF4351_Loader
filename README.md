@@ -6,3 +6,5 @@ This code takes some of the pain out of configuring an ADF4351 chip via an Ardui
 Can drive multiple latch eneable lines for systems with more than one chip to configure.
 
 After loading the ADF4351 with the values, the Arduino goes to sleep to minimise any chance of sprogs on receive.
+
+After you have set it up and programmed your Arduino and forgotten what it is configured for, you can always plug a USB lead in and use the serial monitor, where it will tell you how it is configured as it boots up.
