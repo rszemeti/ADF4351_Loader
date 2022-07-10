@@ -2,14 +2,12 @@
 //*****************************************************************
 // ADF4351 PLL-Synthesizer 33Mhz - 4,4Ghz
 // 
-// Headless variant, no LCD or buttons
+// Headless for use as a 1khz modulated source for the HP 415E "SWR Meter" on antenna test ranges.
 //
-// ADF4351 PLL-VCO Board 
 //
 // License: adapted from code by oe6ocg, and others.
-//
-// Refactored and bug fixed: Robin Szemeti, G1YFG
-//
+//*****************************************************************
+
 // Remember to use resistor divider to translate Arduino 5V to 3.3V for the 
 // VCO board.  It *will not like* 5V!
 
@@ -17,40 +15,64 @@
 #include <SPI.h>
 #include <avr/sleep.h>
 
-// Configuration begins here ********************************************
-
-// Uses SPI 0 (2 pins) plus a "select pin", can work with more than one device.
+// Uses SPI 0 (2 pins) plus a "select pin" and "modulation pin";
 
 const int slaveSelectPin1 = 3;  // Slave 1 LE select
-const int slaveSelectPin2 = 4;  // Slave 2 LE select
+const int modPin = 4;           // Modulation ouptut for PA stage
+
+// Uses 4 digital inputs to select 8 bands, plus mod on/off
+const int sw1 = A5;  //LSB
+const int sw2 = A4;
+const int sw4 = A3;  
+const int sw8 = A2;  //MSB & modulation on/off
+
 
 /*
  * Have to use F in kHz as high (4.4GHz) freq will not fit into an unsigned long
  */
-unsigned long Freq1 = 2175000;  //Frequency in KHz
-unsigned long Freq2 = 2175000;  //Frequency in KHz
+unsigned static const long Freq[8] = { 
+  50200,
+  70200,
+  144200,
+  432200,
+  1296200,
+  2300200,
+  2320200,
+  3400200
+};
 
-long refin = 10000000; // 10Mhz
+long refin = 25000000; // 10Mhz
 long ChanStep = 25000; //Channel spacing
 
-// Configuration ends here, no need to change stuff below here hopefully .. 
+int band;
+int modulation;
 
 unsigned long Reg[6]; //ADF4351 Reg's
 
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(modPin, OUTPUT);
+
+  pinMode(sw1, INPUT_PULLUP);
+  pinMode(sw2, INPUT_PULLUP);
+  pinMode(sw4, INPUT_PULLUP);
+  pinMode(sw8, INPUT_PULLUP);
 
   Serial.begin(115200);// USB to PC for Debug only
   Serial.println("Starting ADF4351");
   Serial.print("Ref Frequency  (Hz): "); Serial.println(refin);
-  Serial.print("Ch1 Frequency (kHz): "); Serial.println(Freq1);
-  Serial.print("Ch2 Frequency (kHz): "); Serial.println(Freq2);
 
-  // setup the control pins for writing to two ADF boards if needed
+  for(int i=0;i<8;i++){
+    Serial.print("Band "); 
+    Serial.print(i); 
+    Serial.print(" Frequency (kHz): "); 
+    Serial.println(Freq[i]);
+  }
+
+  // setup the control pin for writing
   pinMode (slaveSelectPin1, OUTPUT);
   digitalWrite(slaveSelectPin1, LOW);
-  pinMode (slaveSelectPin2, OUTPUT);
-  digitalWrite(slaveSelectPin2, LOW);
-  
+
   SPI.setDataMode(SPI_MODE0);
   SPI.setBitOrder(MSBFIRST);
   SPI.setClockDivider(SPI_CLOCK_DIV128);
@@ -74,26 +96,49 @@ void setup() {
   Reg[0] = 0x570000;
 */
 
-  Serial.println("Writing Ch1 Registers ..");
-  ConvertFreq(Freq1, Reg);
-  SetFreq(slaveSelectPin1);
+  band = -1;
+  modulation = -1;
 
-  Serial.println("Writing Ch2 Registers ..");
-  // Ignore this if not needed.
-  ConvertFreq(Freq2, Reg);
-  SetFreq(slaveSelectPin2);
+  Serial.println("Setup done, ready.");
 
-  Serial.println("Done, sleeping.");
-  delay(500);
-  
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  sleep_enable();
-  sleep_mode();
+
 }
 
+
+
 void loop() {
-  // should be asleep and never hit this.
-  delay(500);
+
+  int newBand = 7 - digitalRead(sw1)-
+                2*digitalRead(sw2)-
+                4*digitalRead(sw4);
+
+  if(band != newBand){
+
+    band = newBand;
+
+    Serial.print("Setting band ");
+    Serial.print(band);
+    Serial.print(", ");
+    Serial.print(Freq[band]);
+    Serial.println(" kHz");
+    ConvertFreq(Freq[band], Reg);
+    SetFreq(slaveSelectPin1);
+  }
+
+  int newMod = digitalRead(sw8);
+  if(modulation != newMod){
+    modulation = newMod;
+    if(modulation){
+    Serial.println("Modulation on");
+    tone(modPin,1000);
+    }else{
+      Serial.println("Modulation off");
+      noTone(modPin);
+      digitalWrite(modPin,HIGH);
+    }
+  }
+  
+  delay(1000);  
 }
 
 void SetFreq(int ssPin)
@@ -222,7 +267,7 @@ void ConvertFreq(unsigned long freq, unsigned long R[])
   int B_BandSelClk = 200; // 8bit
 
 
-  // an unsigend long wont quite hold 4.4GHz, so work with f/10 for now.
+// an unsigend long wont quite hold 4.4GHz, so work with f/10 for now.
   unsigned long RFout = freq * 100;   // VCO-Frequenz
   // calc bandselect und RF-div
   int outdiv = 1;
@@ -278,3 +323,11 @@ void ConvertFreq(unsigned long freq, unsigned long R[])
 }
 //to do instead of writing 0x08000000 you can use other two possibilities: (1ul << 27) or (uint32_t) (1 << 27).
 
+
+// as PLL-Register Referenz
+// R[0] = (0x002E0020); // 145.0 Mhz, 12.5khz raster
+// R[1] = (0x08008029);
+// R[2] = (0x00004E42);
+// R[3] = (0x000004B3);
+// R[4] = (0x00BC8024);
+// R[5] = (0x00580005);
