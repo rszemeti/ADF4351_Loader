@@ -2,8 +2,9 @@
 //*****************************************************************
 // ADF4351 PLL-Synthesizer 33Mhz - 4,4Ghz
 // 
-// Headless for use as a 1khz modulated source for the HP 415E "SWR Meter" on antenna test ranges.
+// Headless variant, no LCD or buttons
 //
+// ADF4351 PLL-VCO Board 
 //
 // License: adapted from code by oe6ocg, and others.
 //*****************************************************************
@@ -100,11 +101,7 @@ void setup() {
   modulation = -1;
 
   Serial.println("Setup done, ready.");
-
-
 }
-
-
 
 void loop() {
 
@@ -121,28 +118,32 @@ void loop() {
     Serial.print(", ");
     Serial.print(Freq[band]);
     Serial.println(" kHz");
-    ConvertFreq(Freq[band], Reg);
-    SetFreq(slaveSelectPin1);
+    SetFreq(Freq[band], slaveSelectPin1);
   }
 
   int newMod = digitalRead(sw8);
   if(modulation != newMod){
     modulation = newMod;
     if(modulation){
-    Serial.println("Modulation on");
+    Serial.println("Modulation: on");
     tone(modPin,1000);
     }else{
-      Serial.println("Modulation off");
+      Serial.println("Modulation: off");
       noTone(modPin);
       digitalWrite(modPin,HIGH);
     }
-  }
-  
+  }  
   delay(1000);  
 }
 
-void SetFreq(int ssPin)
+/*
+ * Parameters:
+ * freq in khz
+ * pin that the "slave select" input of the target board is connected to
+ */
+void SetFreq(unsigned long freq, int ssPin)
 {
+  ConvertFreq(freq, Reg);
   WriteADF2(5, ssPin);
   delayMicroseconds(2500);
   WriteADF2(4, ssPin);
@@ -161,12 +162,14 @@ void WriteADF2(int idx, int ssPin)
 {
   //Make sure the idx is written into the first 3 bits
   Reg[idx]= (Reg[idx] & 0xFFFFFFF8) + (0x07 & idx);
+  char regValue[9];
+  sprintf(regValue, "%08lX", Reg[idx]); 
   
   Serial.print("Reg ");
   Serial.print(idx);
   Serial.print(": ");
-  Serial.print(Reg[idx], HEX);
-  Serial.print("\n");
+  Serial.println(regValue);
+
   // make 4 byte from integer for SPI-Transfer
   byte buf[4];
   for (int i = 0; i < 4; i++)
@@ -323,11 +326,3 @@ void ConvertFreq(unsigned long freq, unsigned long R[])
 }
 //to do instead of writing 0x08000000 you can use other two possibilities: (1ul << 27) or (uint32_t) (1 << 27).
 
-
-// as PLL-Register Referenz
-// R[0] = (0x002E0020); // 145.0 Mhz, 12.5khz raster
-// R[1] = (0x08008029);
-// R[2] = (0x00004E42);
-// R[3] = (0x000004B3);
-// R[4] = (0x00BC8024);
-// R[5] = (0x00580005);
